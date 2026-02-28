@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>本地 JSON 對話查看器（豪華版：選取 / 搜索 / TXT+PDF 匯出）</title>
+<style>
+  :root{
+    /* Romantic pink-purple theme */
+    --bg:#faf0f8;            /* page background */
+    --bg2:#f6ecff;           /* subtle alt background */
+    --panel:#fff7fd;         /* cards/panels */
+    --ink:#2a2326;           /* main text */
+    --muted:#7b606a;         /* secondary text */
+    --line:rgba(70,40,55,.12);
+
+    --user:#ffd9e6;          /* user bubble */
+    --assistant:#f0e0ff;      /* assistant bubble */
+    --system:#ffeef5;        /* system bubble */
+    --tool:#fff0e1;          /* tool bubble */
+
+    --chip:rgba(90,40,60,.06);
+    --shadow:0 10px 26px rgba(80,30,55,.10);
+    --radius:16px;
+
+    --hl:#ffe17a;            /* highlight */
+    --codebg:rgba(60,20,40,.06);
+  }
+
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 700px at 15% 0%, var(--bg2) 0%, rgba(246,236,255,0) 60%),
+      radial-gradient(1200px 700px at 85% 10%, rgba(255,217,230,.55) 0%, rgba(255,217,230,0) 60%),
+      linear-gradient(180deg, var(--bg) 0%, #fff7fb 100%);
+  }
+
+  header{
+    position:sticky; top:0; z-index:50;
+    backdrop-filter: blur(10px);
+    background: rgba(250,240,248,.86);
+    border-bottom:1px solid var(--line);
+  }
+
+  .wrap{max-width:1200px;margin:0 auto;padding:14px 14px 10px}
+  .topbar{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch}
+
+  .dropzone{
+    flex:1 1 340px; min-height:56px;
+    border:1.5px dashed rgba(80,30,55,.24);
+    border-radius:var(--radius);
+    background:rgba(255,247,253,.9);
+    padding:10px 12px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    box-shadow:var(--shadow);
+    cursor:pointer;
+  }
+  .dropzone.dragover{border-color:rgba(80,30,55,.45);background:rgba(255,255,255,.82)}
+  .dz-left{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .dz-title{font-weight:650;font-size:14px}
+  .dz-sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .inputs{
+    flex:1 1 340px;
+    border-radius:var(--radius);
+    background:rgba(255,247,253,.9);
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+    padding:10px 12px;
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  }
+  label{
+    font-size:12px;color:var(--muted);
+    display:flex; flex-direction:column; gap:6px;
+    flex:1 1 160px; min-width:160px;
+  }
+  input[type="text"], input[type="search"]{
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:10px 12px;
+    background:rgba(255,255,255,.82);
+    font-size:13px; outline:none;
+    color:var(--ink);
+  }
+  input[type="search"]{width:100%}
+
+  .btn{
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.72);
+    border-radius:12px;
+    padding:10px 12px;
+    cursor:pointer;
+    color:var(--ink);
+    font-size:13px; font-weight:600;
+    transition: transform .05s ease, background .2s ease;
+    user-select:none;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:rgba(255,255,255,.92)}
+  .btn.ghost{background:rgba(255,255,255,.48)}
+  .btn.tiny{padding:7px 10px;font-size:12px;border-radius:10px}
+  .btn.warn{background:rgba(255,255,255,.72);border-color:rgba(70,40,55,.16)}
+
+  .toolbar{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .toolbar .left{flex:1 1 380px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .toolbar .right{flex:1 1 760px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;align-items:flex-end}
+
+  .pill{
+    background:var(--chip);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:8px 10px;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  .checkpill{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:8px 10px;
+    border-radius:999px;
+    background:var(--chip);
+    border:1px solid var(--line);
+    color:var(--muted);
+    font-size:12px;
+    user-select:none;
+  }
+  .checkpill input{width:16px;height:16px;accent-color: rgba(90,35,60,.75);}
+
+  main{
+    max-width:1200px; margin:0 auto; padding:14px;
+    display:grid; grid-template-columns:320px 1fr; gap:14px;
+  }
+
+  .sidebar{
+    background:rgba(255,247,253,.88);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    min-height:60vh;
+  }
+  .sidehead{
+    padding:12px 12px 10px;
+    border-bottom:1px solid var(--line);
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .sidehead h2{margin:0;font-size:14px}
+  .convlist{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+  .convitem{
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:10px 10px;
+    background:rgba(255,255,255,.62);
+    cursor:pointer;
+    transition: background .2s ease, transform .05s ease;
+  }
+  .convitem:hover{background:rgba(255,255,255,.82)}
+  .convitem:active{transform:translateY(1px)}
+  .convitem.active{background:rgba(255,255,255,.95);border-color:rgba(70,40,55,.20)}
+  .convtitle{font-weight:700;font-size:13px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .convmeta{font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap}
+
+  .content{
+    background:rgba(255,247,253,.88);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    display:flex; flex-direction:column;
+    min-height:60vh;
+  }
+  .contenthead{
+    padding:12px 12px 10px;
+    border-bottom:1px solid var(--line);
+    display:flex; gap:10px; align-items:flex-start; justify-content:space-between; flex-wrap:wrap;
+  }
+  .contenthead h2{margin:0;font-size:14px;line-height:1.35}
+  .contenthead .sub{margin-top:4px;font-size:12px;color:var(--muted)}
+
+  .chat{
+    padding:14px;
+    overflow:auto;
+    display:flex; flex-direction:column; gap:12px;
+  }
+  .empty{padding:20px;color:var(--muted);font-size:13px}
+
+  .bubbleRow{display:flex;gap:10px;align-items:flex-start}
+  .pick{
+    flex:0 0 auto;
+    margin-top:10px;
+    width:22px;height:22px;
+    accent-color: rgba(90,35,60,.70);
+  }
+  .bubble{
+    border-radius:18px;
+    padding:10px 12px;
+    border:1px solid rgba(70,40,55,.12);
+    max-width:880px;
+    width:fit-content;
+    box-shadow:0 8px 18px rgba(80,30,55,.08);
+  }
+  .bubble.user{background:var(--user);margin-left:auto}
+  .bubble.assistant{background:var(--assistant);margin-right:auto}
+  .bubble.system{background:var(--system);margin-right:auto}
+  .bubble.tool{background:var(--tool);margin-right:auto}
+
+  .meta{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:6px}
+  .rolechip{
+    font-size:11px;font-weight:800;letter-spacing:.2px;
+    padding:5px 8px;border-radius:999px;
+    background:rgba(255,255,255,.64);
+    border:1px solid rgba(70,40,55,.10);
+    display:inline-flex;gap:6px;align-items:center
+  }
+  .time{font-size:11px;color:rgba(70,40,55,.58);white-space:nowrap}
+
+  .msgtext{font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+  .codeblock{
+    margin-top:10px;margin-bottom:2px;
+    background:var(--codebg);
+    border:1px solid rgba(70,40,55,.12);
+    border-radius:12px;
+    padding:10px 12px;
+    overflow:auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    font-size:12px; line-height:1.55;
+    white-space:pre-wrap;
+  }
+
+  details.thinking{
+    margin-top:10px;
+    border-radius:14px;
+    border:1px solid rgba(70,40,55,.14);
+    background:rgba(255,255,255,.62);
+    overflow:hidden;
+  }
+  details.thinking summary{
+    cursor:pointer;
+    padding:10px 12px;
+    font-weight:800;font-size:12px;
+    user-select:none;
+    list-style:none;
+    color:rgba(60,25,40,.88);
+  }
+  details.thinking summary::-webkit-details-marker{display:none}
+  .thinking .inner{
+    padding:10px 12px 12px;
+    border-top:1px solid rgba(70,40,55,.10);
+    font-size:12px; line-height:1.6;
+    color:rgba(60,25,40,.80);
+    white-space:pre-wrap; word-break:break-word;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+    background:rgba(60,20,40,.03);
+  }
+
+  mark.hl{background:var(--hl);padding:0 2px;border-radius:4px}
+
+  footer{
+    border-top:1px solid var(--line);
+    background: rgba(250,240,248,.84);
+    padding:12px 14px;
+    color:var(--muted);
+    font-size:12px;
+  }
+
+  @media (max-width: 920px){
+    main{grid-template-columns:1fr}
+    .sidebar{min-height:auto}
+    .content{min-height:55vh}
+    .bubble{max-width:100%}
+    .toolbar .right{justify-content:flex-start}
+  }
+</style>
+</head>
+
+<body>
+<header>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="導入 JSON 檔案">
+        <div class="dz-left">
+          <div class="dz-title">導入 JSON</div>
+          <div class="dz-sub" id="fileHint">點擊選擇或拖入 .json（資料只在本地瀏覽器處理）</div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button class="btn primary" id="pickBtn" type="button">選擇檔案</button>
+          <input id="fileInput" type="file" accept=".json,application/json" hidden />
+        </div>
+      </div>
+
+      <div class="inputs">
+        <label>用戶名字（user）
+          <input id="userName" type="text" placeholder="例如：小貓" value="User" />
+        </label>
+        <label>AI 名字（assistant）
+          <input id="assistantName" type="text" placeholder="例如：莫伊" value="Assistant" />
+        </label>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="left">
+        <span class="pill" id="statsPill">未載入檔案</span>
+        <span class="pill" id="selPill">已選取：0</span>
+        <button class="btn tiny ghost" id="clearBtn" type="button">清空</button>
+      </div>
+
+      <div class="right">
+        <label style="flex:1 1 260px;min-width:220px;">搜索（只在當前對話中）
+          <input id="searchInput" type="search" placeholder="輸入關鍵詞…（會反白標示）" />
+        </label>
+
+        <button class="btn tiny" id="toggleThinkingBtn" type="button">思考鏈：顯示</button>
+        <button class="btn tiny" id="collapseAllBtn" type="button">全部折疊</button>
+        <button class="btn tiny" id="expandAllBtn" type="button">全部展開</button>
+
+        <label class="checkpill" title="只影響匯出，不影響畫面顯示">
+          <input id="exportThinkingToggle" type="checkbox" checked />
+          匯出含思考鏈
+        </label>
+
+        <button class="btn tiny" id="selectVisibleBtn" type="button" title="全選目前畫面顯示（=搜索結果）">全選顯示</button>
+        <button class="btn tiny" id="clearSelectionBtn" type="button">取消全選</button>
+
+        <button class="btn tiny primary" id="exportSelTxtBtn" type="button">匯出選取 TXT</button>
+        <button class="btn tiny primary" id="exportSelPdfBtn" type="button">匯出選取 PDF</button>
+
+        <button class="btn tiny warn" id="exportAllTxtBtn" type="button">匯出整段 TXT</button>
+        <button class="btn tiny warn" id="exportAllPdfBtn" type="button">匯出整段 PDF</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="sidebar">
+    <div class="sidehead">
+      <h2>對話列表</h2>
+      <span class="pill" id="convCount">0</span>
+    </div>
+    <div class="convlist" id="convList">
+      <div class="empty">導入 JSON 後，這裡會顯示對話清單（按時間倒序）。</div>
+    </div>
+  </section>
+
+  <section class="content">
+    <div class="contenthead">
+      <div class="titlewrap">
+        <h2 id="activeTitle">尚未選擇對話</h2>
+        <div class="sub" id="activeMeta">請先導入 JSON，然後點選左側某一個對話。</div>
+      </div>
+    </div>
+
+    <div class="chat" id="chat">
+      <div class="empty">等待載入。</div>
+    </div>
+
+    <footer>
+      安全說明：這是一個純前端頁面，所有資料只在你的瀏覽器本地讀取、解析與渲染，不會上傳到任何伺服器，也不依賴外部服務。PDF 匯出透過瀏覽器列印功能「另存為 PDF」完成。
+    </footer>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  const dropzone = $("dropzone");
+  const fileInput = $("fileInput");
+  const pickBtn = $("pickBtn");
+  const fileHint = $("fileHint");
+
+  const userNameInput = $("userName");
+  const assistantNameInput = $("assistantName");
+
+  const convListEl = $("convList");
+  const convCountEl = $("convCount");
+  const statsPill = $("statsPill");
+  const selPill = $("selPill");
+
+  const activeTitleEl = $("activeTitle");
+  const activeMetaEl = $("activeMeta");
+  const chatEl = $("chat");
+
+  const searchInput = $("searchInput");
+  const toggleThinkingBtn = $("toggleThinkingBtn");
+  const collapseAllBtn = $("collapseAllBtn");
+  const expandAllBtn = $("expandAllBtn");
+  const clearBtn = $("clearBtn");
+
+  const exportThinkingToggle = $("exportThinkingToggle");
+
+  const selectVisibleBtn = $("selectVisibleBtn");
+  const clearSelectionBtn = $("clearSelectionBtn");
+
+  const exportSelTxtBtn = $("exportSelTxtBtn");
+  const exportSelPdfBtn = $("exportSelPdfBtn");
+  const exportAllTxtBtn = $("exportAllTxtBtn");
+  const exportAllPdfBtn = $("exportAllPdfBtn");
+
+  let normalizedConversations = [];
+  let activeConvId = null;
+  let showThinking = true;
+
+  // selection state: Map<convId, Set<messageId>>
+  const selectionMap = new Map();
+  let currentVisibleMessageIds = [];
+
+  // ---------- utilities ----------
+  function safeDate(d){
+    try{ const dt = new Date(d); if (isNaN(dt.getTime())) return null; return dt; }catch{ return null; }
+  }
+  function fmt(dt){ return dt ? dt.toLocaleString() : "—"; }
+  function escHtml(s){
+    return (s ?? "").replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+  function splitByFences(text){
+    const s = text ?? "";
+    const parts = [];
+    const fenceRe = /```([\s\S]*?)```/g;
+    let last = 0, m;
+    while((m = fenceRe.exec(s))){
+      if (m.index > last) parts.push({type:"text", value: s.slice(last, m.index)});
+      parts.push({type:"code", value: m[1]});
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) parts.push({type:"text", value: s.slice(last)});
+    return parts;
+  }
+  function normalizeRole(r){
+    if(!r) return "user";
+    const x = String(r).toLowerCase();
+    if (x === "human") return "user";
+    if (x === "assistant" || x === "ai") return "assistant";
+    if (x === "system") return "system";
+    if (x === "tool" || x === "function") return "tool";
+    if (x === "user") return "user";
+    return x;
+  }
+  function roleLabel(role){
+    const userName = userNameInput.value?.trim() || "User";
+    const assistantName = assistantNameInput.value?.trim() || "Assistant";
+    if (role === "user") return userName;
+    if (role === "assistant") return assistantName;
+    if (role === "system") return "System";
+    if (role === "tool") return "Tool";
+    return role;
+  }
+  function highlightPlainText(plain, keyword){
+    if(!keyword) return escHtml(plain);
+    const re = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig");
+    let last = 0, out = "", m;
+    while((m = re.exec(plain))){
+      out += escHtml(plain.slice(last, m.index));
+      out += '<mark class="hl">' + escHtml(plain.slice(m.index, m.index + m[0].length)) + '</mark>';
+      last = m.index + m[0].length;
+    }
+    out += escHtml(plain.slice(last));
+    return out;
+  }
+  function cryptoRandomId(){
+    if (crypto && crypto.getRandomValues){
+      const a = new Uint8Array(8);
+      crypto.getRandomValues(a);
+      return [...a].map(x => x.toString(16).padStart(2,"0")).join("");
+    }
+    return String(Math.random()).slice(2);
+  }
+  function sanitizeFilename(s){
+    return (s || "conversation")
+      .replace(/[\\\/:*?"<>|]+/g, "_")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80) || "conversation";
+  }
+
+  function getSelectionSet(convId){
+    if (!selectionMap.has(convId)) selectionMap.set(convId, new Set());
+    return selectionMap.get(convId);
+  }
+  function updateSelectionPill(){
+    const set = activeConvId ? getSelectionSet(activeConvId) : new Set();
+    selPill.textContent = "已選取：" + set.size;
+  }
+
+  // ---------- Claude: response.content[] split thinking/text ----------
+  function parseClaudeResponseContent(contentArr){
+    let thinkingText = "";
+    let responseText = "";
+    for (const block of contentArr){
+      if(!block) continue;
+      const t = String(block.type || "").toLowerCase();
+      if (t === "thinking"){
+        const v = (typeof block.thinking === "string") ? block.thinking : (typeof block.text === "string" ? block.text : "");
+        if (v) thinkingText += (thinkingText ? "\n" : "") + v;
+      } else if (t === "text"){
+        const v = (typeof block.text === "string") ? block.text : "";
+        if (v) responseText += (responseText ? "\n" : "") + v;
+      }
+    }
+    return {thinkingText, responseText};
+  }
+
+  // ---------- parser: avoid duplicates by choosing ONE source of truth ----------
+  function parseConversationArray(arr){
+    const out = [];
+    for (const conv of arr){
+      const id = conv.uuid || conv.id || cryptoRandomId();
+      const createdAt = safeDate(conv.created_at || conv.createdAt || conv.created || null);
+      const updatedAt = safeDate(conv.updated_at || conv.updatedAt || conv.updated || null);
+      const title = (conv.name || conv.title || conv.summary || conv.topic || "").trim() || ("對話 " + id.slice(0,6));
+
+      const rawMsgs = conv.chat_messages || conv.messages || [];
+      const messages = [];
+
+      for (const msg of rawMsgs){
+        const mid = msg.uuid || msg.id || cryptoRandomId();
+        const role = normalizeRole(msg.sender || msg.role || msg.author || msg.type);
+        const mCreatedAt = safeDate(msg.created_at || msg.createdAt || msg.timestamp || null);
+
+        let text = "";
+        let thinking = "";
+
+        const hasClaudeBlocks = !!(msg.response && Array.isArray(msg.response.content));
+        const hasContentBlocks = Array.isArray(msg.content) && msg.content.length > 0;
+        const hasPlainText = (typeof msg.text === "string" && msg.text.length > 0);
+
+        // Priority:
+        // 1) Claude response.content[] (split thinking/text)
+        // 2) content[] blocks (text + thinking)
+        // 3) fallback msg.text
+        if (hasClaudeBlocks){
+          const {thinkingText, responseText} = parseClaudeResponseContent(msg.response.content);
+          thinking = thinkingText || "";
+          text = responseText || "";
+        } else if (hasContentBlocks){
+          for (const block of msg.content){
+            if (!block) continue;
+            const bType = String(block.type || "").toLowerCase();
+            if (bType === "text" && typeof block.text === "string" && block.text){
+              text += (text ? "\n" : "") + block.text;
+            }
+            if ((bType === "thinking" || bType === "reasoning") && typeof block.thinking === "string" && block.thinking){
+              thinking += (thinking ? "\n" : "") + block.thinking;
+            }
+            if ((bType === "thinking" || bType === "reasoning") && typeof block.text === "string" && block.text){
+              thinking += (thinking ? "\n" : "") + block.text;
+            }
+          }
+        } else if (hasPlainText){
+          text = msg.text;
+        }
+
+        messages.push({ id: mid, role, createdAt: mCreatedAt, text: text ?? "", thinking: thinking ?? "" });
+      }
+
+      out.push({ id, title, createdAt, updatedAt, messages });
+    }
+
+    // conversation list newest first (left sidebar)
+    out.sort((a,b) => {
+      const ta = (a.createdAt?.getTime?.() ?? a.updatedAt?.getTime?.() ?? 0);
+      const tb = (b.createdAt?.getTime?.() ?? b.updatedAt?.getTime?.() ?? 0);
+      return tb - ta;
+    });
+    return out;
+  }
+
+  function wrapSingleConversationFromMessages(msgArr){
+    const now = new Date();
+    return {
+      id: cryptoRandomId(),
+      title: "匯入的訊息集",
+      createdAt: now,
+      updatedAt: now,
+      messages: msgArr.map(m => ({
+        id: m.uuid || m.id || cryptoRandomId(),
+        role: normalizeRole(m.sender || m.role || m.type),
+        createdAt: safeDate(m.created_at || m.createdAt || m.timestamp || null),
+        text: String(m.text || ""),
+        thinking: ""
+      }))
+    };
+  }
+
+  function wrapSingleConversationFromClaude(root){
+    const now = new Date();
+    const {thinkingText, responseText} = parseClaudeResponseContent(root.response.content);
+    return {
+      id: root.uuid || root.id || cryptoRandomId(),
+      title: root.title || root.name || "Claude 匯入",
+      createdAt: safeDate(root.created_at || root.createdAt) || now,
+      updatedAt: safeDate(root.updated_at || root.updatedAt) || now,
+      messages: [
+        ...(root.prompt ? [{
+          id: cryptoRandomId(),
+          role: "user",
+          createdAt: safeDate(root.created_at || root.createdAt) || now,
+          text: String(root.prompt),
+          thinking: ""
+        }] : []),
+        {
+          id: cryptoRandomId(),
+          role: "assistant",
+          createdAt: safeDate(root.updated_at || root.updatedAt) || now,
+          text: responseText || "",
+          thinking: thinkingText || ""
+        }
+      ]
+    };
+  }
+
+  function parseAnyJson(root){
+    if (Array.isArray(root)){
+      if (root.length && root[0] && (root[0].chat_messages || root[0].messages)) return parseConversationArray(root);
+      if (root.length && root[0] && (root[0].role || root[0].sender || root[0].type)) return [wrapSingleConversationFromMessages(root)];
+      return [];
+    }
+    if (root && typeof root === "object"){
+      if (Array.isArray(root.conversations)) return parseConversationArray(root.conversations);
+      if (Array.isArray(root.chat_messages)) return parseConversationArray([root]);
+      if (Array.isArray(root.messages)) return parseConversationArray([root]);
+      if (root.response && Array.isArray(root.response.content)) return [wrapSingleConversationFromClaude(root)];
+      if (Array.isArray(root.data)) return parseAnyJson(root.data);
+      return [];
+    }
+    return [];
+  }
+
+  // ---------- rendering ----------
+  function refreshStats(){
+    const totalConvs = normalizedConversations.length;
+    const totalMsgs = normalizedConversations.reduce((s,c) => s + (c.messages?.length || 0), 0);
+    statsPill.textContent = totalConvs ? ("已載入：" + totalConvs + " 個對話 / " + totalMsgs + " 則訊息") : "未載入檔案";
+  }
+
+  function renderConversationList(){
+    convListEl.innerHTML = "";
+    convCountEl.textContent = String(normalizedConversations.length);
+
+    if (!normalizedConversations.length){
+      convListEl.innerHTML = '<div class="empty">未解析到可用的對話資料。請確認 JSON 結構或更換匯出檔。</div>';
+      return;
+    }
+
+    for (const conv of normalizedConversations){
+      const item = document.createElement("div");
+      item.className = "convitem" + (conv.id === activeConvId ? " active" : "");
+      const created = conv.createdAt || conv.updatedAt;
+      const updated = conv.updatedAt;
+
+      item.innerHTML =
+        '<div class="convtitle">' + escHtml(conv.title) + '</div>' +
+        '<div class="convmeta">' +
+          '<span>建立：' + escHtml(fmt(created)) + '</span>' +
+          '<span>更新：' + escHtml(fmt(updated)) + '</span>' +
+          '<span>訊息：' + (conv.messages?.length ?? 0) + '</span>' +
+        '</div>';
+
+      item.addEventListener("click", () => {
+        activeConvId = conv.id;
+        searchInput.value = "";
+        getSelectionSet(conv.id);
+        renderConversationList();
+        renderActiveConversation();
+        updateSelectionPill();
+      });
+
+      convListEl.appendChild(item);
+    }
+  }
+
+  function getActiveConversation(){
+    return normalizedConversations.find(c => c.id === activeConvId) || null;
+  }
+
+  // chat UI: oldest -> newest (top is first message)
+  function computeVisibleMessages(conv){
+    const keyword = (searchInput.value || "").trim();
+    const hasKeyword = !!keyword;
+
+    const msgs = [...(conv.messages || [])].sort((a,b) => {
+      const ta = a.createdAt?.getTime?.() ?? 0;
+      const tb = b.createdAt?.getTime?.() ?? 0;
+      return ta - tb;
+    });
+
+    const visible = [];
+    for (const m of msgs){
+      const hasText = (m.text || "").trim().length > 0;
+      const hasThinking = (m.thinking || "").trim().length > 0;
+
+      if (!hasText && !(showThinking && hasThinking)) continue;
+
+      if (hasKeyword){
+        const hay = ((m.text || "") + "\n" + (m.thinking || "")).toLowerCase();
+        if (!hay.includes(keyword.toLowerCase())) continue;
+      }
+      visible.push(m);
+    }
+    return visible;
+  }
+
+  function renderActiveConversation(){
+    const conv = getActiveConversation();
+    chatEl.innerHTML = "";
+    currentVisibleMessageIds = [];
+
+    if (!conv){
+      activeTitleEl.textContent = "尚未選擇對話";
+      activeMetaEl.textContent = "請先導入 JSON，然後點選左側某一個對話。";
+      chatEl.innerHTML = '<div class="empty">等待載入。</div>';
+      return;
+    }
+
+    activeTitleEl.textContent = conv.title || "（無標題）";
+    activeMetaEl.textContent = "建立：" + fmt(conv.createdAt) + "　更新：" + fmt(conv.updatedAt) + "　訊息：" + conv.messages.length;
+
+    const keyword = (searchInput.value || "").trim();
+    const visibleMsgs = computeVisibleMessages(conv);
+    currentVisibleMessageIds = visibleMsgs.map(m => m.id);
+
+    const selection = getSelectionSet(conv.id);
+
+    if (!visibleMsgs.length){
+      chatEl.innerHTML = '<div class="empty">目前條件下沒有可顯示的訊息（可能全是空白，或搜索未匹配）。</div>';
+      return;
+    }
+
+    for (const m of visibleMsgs){
+      const row = document.createElement("div");
+      row.className = "bubbleRow";
+
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.className = "pick";
+      cb.checked = selection.has(m.id);
+      cb.addEventListener("change", () => {
+        if (cb.checked) selection.add(m.id);
+        else selection.delete(m.id);
+        updateSelectionPill();
+      });
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble " + (m.role || "user");
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      // IMPORTANT: no "(user/assistant)" shown
+      meta.innerHTML =
+        '<span class="rolechip">' + escHtml(roleLabel(m.role)) + '</span>' +
+        '<span class="time">' + escHtml(fmt(m.createdAt)) + '</span>';
+
+      bubble.appendChild(meta);
+
+      const hasThinking = (m.thinking || "").trim().length > 0;
+      if (hasThinking){
+        const details = document.createElement("details");
+        details.className = "thinking";
+        details.open = false;
+        details.style.display = showThinking ? "" : "none";
+
+        const summary = document.createElement("summary");
+        summary.textContent = "思考過程";
+        details.appendChild(summary);
+
+        const inner = document.createElement("div");
+        inner.className = "inner";
+        inner.innerHTML = highlightPlainText(m.thinking, keyword);
+        details.appendChild(inner);
+
+        bubble.appendChild(details);
+      }
+
+      const hasText = (m.text || "").trim().length > 0;
+      if (hasText){
+        const parts = splitByFences(m.text);
+        for (const p of parts){
+          if (p.type === "text"){
+            const div = document.createElement("div");
+            div.className = "msgtext";
+            div.innerHTML = highlightPlainText(p.value, keyword);
+            bubble.appendChild(div);
+          } else {
+            const pre = document.createElement("pre");
+            pre.className = "codeblock";
+            pre.innerHTML = highlightPlainText(p.value.replace(/^\n+|\n+$/g,""), keyword);
+            bubble.appendChild(pre);
+          }
+        }
+      }
+
+      bubble.addEventListener("click", (ev) => {
+        const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toLowerCase() : "";
+        if (tag === "summary" || tag === "details" || tag === "input") return;
+        const sel = window.getSelection?.();
+        if (sel && String(sel).length > 0) return;
+
+        cb.checked = !cb.checked;
+        if (cb.checked) selection.add(m.id);
+        else selection.delete(m.id);
+        updateSelectionPill();
+      });
+
+      row.appendChild(cb);
+      row.appendChild(bubble);
+      chatEl.appendChild(row);
+    }
+  }
+
+  // ---------- selection controls ----------
+  function selectVisible(){
+    const conv = getActiveConversation();
+    if (!conv) return;
+    const sel = getSelectionSet(conv.id);
+    for (const id of currentVisibleMessageIds) sel.add(id);
+    renderActiveConversation();
+    updateSelectionPill();
+  }
+  function clearSelection(){
+    const conv = getActiveConversation();
+    if (!conv) return;
+    const sel = getSelectionSet(conv.id);
+    sel.clear();
+    renderActiveConversation();
+    updateSelectionPill();
+  }
+
+  // ---------- export helpers ----------
+  function getMessagesForExport(conv, mode){
+    let msgs = [...(conv.messages || [])];
+    if (mode === "selected"){
+      const sel = getSelectionSet(conv.id);
+      msgs = msgs.filter(m => sel.has(m.id));
+    }
+    // Export: chronological (old->new)
+    msgs.sort((a,b) => {
+      const ta = a.createdAt?.getTime?.() ?? 0;
+      const tb = b.createdAt?.getTime?.() ?? 0;
+      return ta - tb;
+    });
+    return msgs;
+  }
+
+  function exportToTxt(mode){
+    const conv = getActiveConversation();
+    if (!conv){ alert("請先選擇一個對話再匯出。"); return; }
+
+    const msgs = getMessagesForExport(conv, mode);
+    if (mode === "selected" && msgs.length === 0){ alert("目前沒有選取任何訊息。"); return; }
+
+    const includeThinking = !!exportThinkingToggle.checked;
+
+    const lines = [];
+    lines.push("對話標題：" + (conv.title || "（無標題）"));
+    lines.push("建立時間：" + fmt(conv.createdAt) + "    更新時間：" + fmt(conv.updatedAt));
+    lines.push("用戶：" + roleLabel("user") + "    Assistant：" + roleLabel("assistant"));
+    lines.push("匯出模式：" + (mode === "all" ? "整段" : "選取"));
+    lines.push("思考鏈：" + (includeThinking ? "包含" : "不包含"));
+    lines.push("=".repeat(72));
+
+    let idx = 1;
+    for (const m of msgs){
+      const name = roleLabel(m.role);
+      const t = fmt(m.createdAt);
+
+      const thinking = (m.thinking || "").trim();
+      const text = (m.text || "").trim();
+      if (!thinking && !text) continue;
+
+      lines.push("[#" + idx + "] " + t);
+      lines.push("發送方：" + name);
+
+      if (includeThinking && thinking){
+        lines.push("思考過程：");
+        lines.push(thinking);
+      }
+      if (text){
+        lines.push("訊息：");
+        lines.push(text);
+      }
+
+      lines.push("-".repeat(72));
+      idx++;
+    }
+
+    const content = lines.join("\n") + "\n";
+    const blob = new Blob([content], {type:"text/plain;charset=utf-8"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = sanitizeFilename(conv.title) + "_" + (mode === "all" ? "ALL" : "SELECTED") + ".txt";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+  }
+
+  function buildPrintHtml(conv, mode){
+    const msgs = getMessagesForExport(conv, mode);
+    const includeThinking = !!exportThinkingToggle.checked;
+
+    const userName = roleLabel("user");
+    const assistantName = roleLabel("assistant");
+
+    function bubbleHtml(m){
+      const role = (m.role || "user");
+      const label = roleLabel(role);
+      const time = fmt(m.createdAt);
+
+      const thinking = (m.thinking || "").trim();
+      const text = (m.text || "").trim();
+
+      if (!text && !(includeThinking && thinking)) return "";
+
+      const parts = splitByFences(text);
+      const main = parts.map(p => {
+        if (p.type === "text"){
+          const v = (p.value || "");
+          if (!v.trim()) return "";
+          return '<div class="msgtext">' + escHtml(v) + '</div>';
+        } else {
+          const v = (p.value || "").replace(/^\n+|\n+$/g,"");
+          if (!v.trim()) return "";
+          return '<pre class="codeblock">' + escHtml(v) + '</pre>';
+        }
+      }).join("");
+
+      const thinkBox = (includeThinking && thinking)
+        ? ('<div class="thinkingBox"><div class="thinkingTitle">思考過程</div><pre class="thinkingBody">' + escHtml(thinking) + '</pre></div>')
+        : "";
+
+      return (
+        '<div class="bubble ' + escHtml(role) + '">' +
+          '<div class="meta">' +
+            '<span class="rolechip">' + escHtml(label) + '</span>' +
+            '<span class="time">' + escHtml(time) + '</span>' +
+          '</div>' +
+          thinkBox +
+          main +
+        '</div>'
+      );
+    }
+
+    const bodyBubbles = msgs.map(bubbleHtml).join("") || '<div style="color:#7b606a;font-size:13px;">沒有可列印的內容（可能全為空訊息或未選取）。</div>';
+
+    // IMPORTANT: no <script> tag inside returned HTML
+    return (
+'<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8" />' +
+'<meta name="viewport" content="width=device-width,initial-scale=1" />' +
+'<title>' + escHtml(conv.title || "對話") + '（列印）</title>' +
+'<style>' +
+'  :root{--bg:#ffffff;--ink:#2a2326;--muted:#7b606a;--line:rgba(70,40,55,.12);' +
+'  --user:#ffd9e6;--assistant:#f0e0ff;--system:#ffeef5;--tool:#fff0e1;--codebg:rgba(60,20,40,.06);} ' +
+'  *{box-sizing:border-box} body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:var(--bg);color:var(--ink);} ' +
+'  .page{max-width:980px;margin:0 auto;padding:18px 16px 28px;} ' +
+'  .head{border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:14px;} ' +
+'  h1{font-size:18px;margin:0;line-height:1.35;} ' +
+'  .sub{margin-top:6px;font-size:12px;color:var(--muted);display:flex;gap:10px;flex-wrap:wrap;} ' +
+'  .chat{display:flex;flex-direction:column;gap:12px;} ' +
+'  .bubble{border-radius:16px;padding:10px 12px;border:1px solid var(--line);max-width:900px;width:fit-content;page-break-inside:avoid;box-shadow:0 6px 14px rgba(80,30,55,.08);} ' +
+'  .bubble.user{background:var(--user);margin-left:auto;} ' +
+'  .bubble.assistant{background:var(--assistant);margin-right:auto;} ' +
+'  .bubble.system{background:var(--system);margin-right:auto;} ' +
+'  .bubble.tool{background:var(--tool);margin-right:auto;} ' +
+'  .meta{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:6px;} ' +
+'  .rolechip{font-size:11px;font-weight:800;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,.62);border:1px solid rgba(70,40,55,.10);display:inline-flex;gap:6px;align-items:center;} ' +
+'  .time{font-size:11px;color:rgba(70,40,55,.58);white-space:nowrap;} ' +
+'  .msgtext{font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word;margin:0;} ' +
+'  .codeblock{margin-top:10px;margin-bottom:2px;background:var(--codebg);border:1px solid rgba(70,40,55,.12);border-radius:12px;padding:10px 12px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;} ' +
+'  .thinkingBox{margin:8px 0 10px;border-radius:12px;border:1px solid rgba(70,40,55,.14);background:rgba(255,255,255,.62);overflow:hidden;} ' +
+'  .thinkingTitle{font-size:12px;font-weight:900;padding:8px 10px;border-bottom:1px solid rgba(70,40,55,.10);color:rgba(60,25,40,.88);} ' +
+'  .thinkingBody{margin:0;padding:10px;font-size:12px;line-height:1.55;color:rgba(60,25,40,.80);white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;background:rgba(60,20,40,.03);} ' +
+'  @media print{body{background:#fff}.page{padding:0}}' +
+'</style></head>' +
+'<body onload="setTimeout(function(){window.print();},150)">' +
+'<div class="page">' +
+'  <div class="head">' +
+'    <h1>' + escHtml(conv.title || "（無標題）") + '</h1>' +
+'    <div class="sub">' +
+'      <span>建立：' + escHtml(fmt(conv.createdAt)) + '</span>' +
+'      <span>更新：' + escHtml(fmt(conv.updatedAt)) + '</span>' +
+'      <span>用戶：' + escHtml(userName) + '</span>' +
+'      <span>Assistant：' + escHtml(assistantName) + '</span>' +
+'      <span>匯出：' + (mode === "all" ? "整段" : "選取") + '</span>' +
+'      <span>思考鏈：' + (includeThinking ? "包含" : "不包含") + '</span>' +
+'      <span>訊息數：' + msgs.length + '</span>' +
+'    </div>' +
+'  </div>' +
+'  <div class="chat">' + bodyBubbles + '</div>' +
+'</div></body></html>'
+    );
+  }
+
+  function exportToPdf(mode){
+    const conv = getActiveConversation();
+    if (!conv){ alert("請先選擇一個對話再匯出。"); return; }
+    if (mode === "selected"){
+      const sel = getSelectionSet(conv.id);
+      if (sel.size === 0){ alert("目前沒有選取任何訊息。"); return; }
+    }
+    const html = buildPrintHtml(conv, mode);
+    const w = window.open("", "_blank");
+    if (!w){
+      alert("瀏覽器阻擋了彈出視窗。請允許此頁開新視窗後再試一次。");
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
+  // ---------- file import ----------
+  function handleFile(file){
+    fileHint.textContent = "已選擇：" + file.name;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try{
+        const json = JSON.parse(reader.result);
+        normalizedConversations = parseAnyJson(json);
+        activeConvId = normalizedConversations[0]?.id ?? null;
+        if (activeConvId) getSelectionSet(activeConvId);
+
+        refreshStats();
+        renderConversationList();
+        renderActiveConversation();
+        updateSelectionPill();
+      }catch(e){
+        normalizedConversations = [];
+        activeConvId = null;
+        selectionMap.clear();
+        refreshStats();
+        renderConversationList();
+        renderActiveConversation();
+        updateSelectionPill();
+        alert("JSON 解析失敗：請確認檔案內容是合法 JSON。");
+      }
+    };
+    reader.readAsText(file, "utf-8");
+  }
+
+  // ---------- events ----------
+  pickBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    fileInput.click();
+  });
+
+  dropzone.addEventListener("click", () => fileInput.click());
+
+  dropzone.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (f) handleFile(f);
+    fileInput.value = "";
+  });
+
+  userNameInput.addEventListener("input", () => { renderConversationList(); renderActiveConversation(); });
+  assistantNameInput.addEventListener("input", () => { renderConversationList(); renderActiveConversation(); });
+
+  searchInput.addEventListener("input", () => { renderActiveConversation(); });
+
+  toggleThinkingBtn.addEventListener("click", () => {
+    showThinking = !showThinking;
+    toggleThinkingBtn.textContent = "思考鏈：" + (showThinking ? "顯示" : "隱藏");
+    renderActiveConversation();
+  });
+
+  collapseAllBtn.addEventListener("click", () => {
+    chatEl.querySelectorAll("details.thinking").forEach(d => d.open = false);
+  });
+  expandAllBtn.addEventListener("click", () => {
+    chatEl.querySelectorAll("details.thinking").forEach(d => d.open = true);
+  });
+
+  selectVisibleBtn.addEventListener("click", selectVisible);
+  clearSelectionBtn.addEventListener("click", clearSelection);
+
+  exportSelTxtBtn.addEventListener("click", () => exportToTxt("selected"));
+  exportAllTxtBtn.addEventListener("click", () => exportToTxt("all"));
+
+  exportSelPdfBtn.addEventListener("click", () => exportToPdf("selected"));
+  exportAllPdfBtn.addEventListener("click", () => exportToPdf("all"));
+
+  clearBtn.addEventListener("click", () => {
+    normalizedConversations = [];
+    activeConvId = null;
+    selectionMap.clear();
+    fileHint.textContent = "點擊選擇或拖入 .json（資料只在本地瀏覽器處理）";
+    searchInput.value = "";
+    showThinking = true;
+    toggleThinkingBtn.textContent = "思考鏈：顯示";
+    refreshStats();
+    renderConversationList();
+    renderActiveConversation();
+    updateSelectionPill();
+  });
+
+  // initial
+  refreshStats();
+  updateSelectionPill();
+})();
+</script>
+</body>
+</html>
